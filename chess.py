@@ -1,4 +1,9 @@
-from itertools import chain,product
+from itertools import chain,product,combinations
+import copy
+import operator
+import string
+import datrie
+from guppy import hpy
 
 # R Rook
 # N knight
@@ -8,7 +13,7 @@ from itertools import chain,product
 PIECES = set("RNBQK")
 
 def prune(iter,bx,by):
-    return ((x,y) for (x,y) in iter if x >= 0 and y >= 0 and x < bx and y < bx)
+    return ((x,y) for (x,y) in iter if x >= 0 and y >= 0 and x < bx and y < by)
 
 def threatens(piece, x, y, bx, by):
     if piece == "R":
@@ -27,38 +32,125 @@ def threatens(piece, x, y, bx, by):
     else:
         print('unknown piece %s', piece)
 
+FLIP = lambda a: list(reversed(a))
+NOFLIP = lambda a: a
+ROTATE0 = lambda a: a
+ROTATE90 = lambda a: [list(t) for t in zip(*a[::-1])]
+ROTATE180 = lambda a: ROTATE90(ROTATE90(a))
+ROTATE270 = lambda a: ROTATE90(ROTATE90(ROTATE90(a)))
+
+
 class Board(object):
     def __init__(self,bx,by,data=None,free=None):
         self.bx = bx
         self.by = by
-        self.data = data or [list('.'*bx) for j in range(by)]
-        self.free = free or set(product(range(bx), range(by)))
+        self.data = data or [list('.'*by) for j in range(bx)]
+        if free == None and not data:
+            self.free = set(product(range(bx), range(by)))
+        else:
+            self.free = free
+        self.repr = "\n".join("".join(row) for row in self.data)
     def __repr__(self):
-        return "\n".join("".join(row) for row in self.data)
-        #for j in range(self.by):
-        #    val.append("".join([ self.pieces.get((i,j), "." if (i,j) in self.free else ",") for i in range(self.bx)]))
-        #return "\n".join(val)
-    def add_piece(self, piece, x, y): 
-        if (x,y) not in self.free:
-            print "(%i,%i) not in free" % (x,y)
+        return self.repr
+    def __eq__(self, other):
+        return (isinstance(other, self.__class__) and self.__repr__() == other.__repr__())
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    def __hash__(self):
+        return self.__repr__().__hash__()
+    def rotations(self):
+        """ Doesn't translate free lists 
+        """
+        return set(Board(self.bx,self.by,data=list(fs[0](fs[1](self.data)))) for fs in product([FLIP, NOFLIP], [ROTATE0,ROTATE90,ROTATE180,ROTATE270]))
+    def get_canonical(self):
+        return min(r.__repr__() for r in self.rotations())
+    def is_canonical(self):
+        return self.__repr__() == get_canonical(self)
+    def add_piece(self, moves):
+        if not moves or any(move[1:] not in self.free for move in moves):
+            #print "not in free %s free=%s" % (moves,self.free)
             return None
 
         # Check if this piece threatens someone
-        threats =  set(threatens(piece,x,y,bx,by))
+        threats = set(chain( *[threatens(*(t+(self.bx,self.by))) for t in moves]))
+
         if any(self.data[i][j] != '.' for (i,j) in threats):
-            print "%s at (%i,%i) threatens someone" % (piece,x,y)
+            #print "threatens someone"
             return None
 
-        newFree = self.free - threats - {(x,y)}
-        newData = list(self.data)
-        newData[x][y] = piece
+        # Check if the new pieces threaten each other
+        if any(move[1:] in threats for move in moves):
+            #print "threatens %s eachother %s", (moves, threats)
+            return None
+        newFree = self.free - threats - set(move[1:] for move in moves)
+
+        newData = copy.deepcopy(self.data)
+        for (p,x,y) in moves:
+            newData[x][y] = p
         return Board(self.bx, self.by, data=newData, free=newFree)
 
+def impact(piece, x,y):
+    return len(list(threatens(piece, x/2, y/2, x, y)))
 
-pieces = ["N", "N"]
-def main():
+def get_ordering(pieces, board):
+    #return sorted(pieces, key=lambda x: impact(x[0], board.bx, board.by))
+    return sorted(pieces, key=lambda x: x[1]*100-impact(x[0], board.bx, board.by), reverse=True)
+    #r = list("BNKRQ")
+    #return sorted(pieces, key=lambda x: r.index(x[0]), reverse=True)
 
-	print "main"
+def free_rows_and_columns(data):
+    return (sum( 1 for row in data if all(square == '.' for square in row)),
+            sum( 1 for row in zip(*data[::-1]) if all( square == '.' for square in row)))
+
+def filterNode(n,pieces):
+    if len(n.free) < sum(p[1] for p in pieces):
+        #print "%s %s %s"%(len(n.free), sum(p[1] for p in pieces), pieces)
+        return False
+
+    queens_and_rooks = sum(p[1] for p in pieces if p[0] in {'Q','R'})
+
+    if queens_and_rooks > min(free_rows_and_columns(n.data)):
+        return False
+
+    return True
+
+def solve(board,pieces):
+    candidates=[board]
+    next_candidates = iter([])
+    pieces = get_ordering(pieces, board)
+    print "pieces %s" % (pieces,)
+    trie = datrie.Trie("%s.\n"%pieces)
+    trie = {}
+
+    while pieces:
+        (piece, count) = pieces.pop()
+        print "processing %s %i" % (piece, count)
+        print hpy().heap()
+        for c in candidates:
+            cform = unicode(c.get_canonical().__repr__())
+            if cform not in trie:
+                #print cform
+                trie[cform] = True
+                moves = ( [(piece,) + t for t in c] for c in combinations(c.free, count))
+                next_candidates = chain(next_candidates, [c.add_piece(move) for move in moves])
+
+#                next_candidates.extend()
+            #print "canditates now %i" % len(next_candidates)
+        candidates = (n for n in next_candidates if n != None and filterNode(n, pieces))
+        #print "next_candidates %i" % len(candidates)
+        next_candidates = iter([])
+    return candidates
+
+def start(bx, by, pieces):
+    board = Board(bx,by)
+    results = solve(board,pieces) # set( reduce(operator.xor ,(b.rotations() for b in solve(board,pieces))))
+    print "===== RESULTS =============="
+    #for r in results:
+    #    print "%s\n\n" % r
+    print len(list(results))
 
 if __name__ == "__main__":
-	main()
+    #7 8]' '{:K 3, :Q 1, :B 2, :R 2, :N 3}'
+    #start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',2)])
+    start(7,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
+    #start(5,5,[('Q',1), ('R', 1), ('N',4)])
