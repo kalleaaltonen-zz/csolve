@@ -125,7 +125,7 @@ def solve(board,pieces):
     while pieces:
         (piece, count) = pieces.pop()
         print "processing %s %i" % (piece, count)
-        print hpy().heap()
+        #print hpy().heap()
         for c in candidates:
             cform = unicode(c.get_canonical().__repr__())
             if cform not in trie:
@@ -141,9 +141,33 @@ def solve(board,pieces):
         next_candidates = iter([])
     return candidates
 
+def solve_dfs(board, pieces): 
+    stack = [(board, pieces)]
+    solutions = []
+    #discovered = {}
+    discovered = datrie.Trie("%s.\n"%pieces)
+    while stack:
+        b, ps = stack.pop()
+        (p, count), left = ps[0], ps[1:]
+        moves = ( [(p,) + t for t in c] for c in combinations(b.free, count))
+        for move in moves:
+            c = b.add_piece(move)
+            if not c or not filterNode(c, left):
+                #print "filtered!"
+                continue
+            cform = unicode(c.get_canonical().__repr__())
+            if cform not in discovered:
+                if not left:
+                    print "%s\nstack size: %i" % (b, len(stack))
+                    solutions.append(b)
+                    continue
+                discovered[cform] = True
+                stack.append((c, left))
+    return solutions
+
 def start(bx, by, pieces):
     board = Board(bx,by)
-    results = solve(board,pieces) # set( reduce(operator.xor ,(b.rotations() for b in solve(board,pieces))))
+    results = solve_dfs(board,get_ordering(pieces, board)) # set( reduce(operator.xor ,(b.rotations() for b in solve(board,pieces))))
     print "===== RESULTS =============="
     #for r in results:
     #    print "%s\n\n" % r
@@ -151,6 +175,6 @@ def start(bx, by, pieces):
 
 if __name__ == "__main__":
     #7 8]' '{:K 3, :Q 1, :B 2, :R 2, :N 3}'
-    #start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',2)])
-    start(7,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
+    start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',3)])
+    #start(7,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
     #start(5,5,[('Q',1), ('R', 1), ('N',4)])
