@@ -3,6 +3,7 @@ import copy
 import operator
 import string
 import datrie
+import time
 
 # R Rook
 # N knight
@@ -93,9 +94,21 @@ def impact(piece, x,y):
 
 def get_ordering(pieces, board):
     #return sorted(pieces, key=lambda x: impact(x[0], board.bx, board.by))
-    return sorted(pieces, key=lambda x: x[1]*100-impact(x[0], board.bx, board.by), reverse=True)
-    #return sorted(pieces, key=lambda x: list("BNKRQ").index(x[0]), reverse=True)
+    #return sorted(pieces, key=lambda x: x[1]*100-impact(x[0], board.bx, board.by), reverse=True)
+    return sorted(pieces, key=lambda x: list("BNKRQ").index(x[0]), reverse=True)
     #return sorted(pieces, key=lambda x: x[1]*impact(x[0], board.bx, board.by)/len(list(combinations, x[1])), reverse=False)
+
+def most_impactful_first(pieces, board):
+    return sorted(pieces, key=lambda x: impact(x[0], board.bx, board.by), reverse=True)
+
+def least_first(pieces, board):
+    return sorted(pieces, key=lambda x: x[1]*100-impact(x[0], board.bx, board.by))
+
+def fixed_order(pieces, board):
+    return sorted(pieces, key=lambda x: list("BNKRQ").index(x[0]), reverse=True)
+
+def most_impact_per_move(pieces, board):
+    return sorted(pieces, key=lambda x: x[1]*impact(x[0], board.bx, board.by)/len(list(combinations(board.free, x[1]))), reverse=False)
 
 def free_rows_and_columns(data):
     return (sum( 1 for row in data if all(square == '.' for square in row)),
@@ -141,7 +154,9 @@ def solve(board,pieces):
         next_candidates = iter([])
     return candidates
 
-def solve_dfs(board, pieces): 
+def solve_dfs(board, pieces,ordering):
+    t = time.time()
+    pieces = ordering(pieces, board)
     stack = [(board, pieces)]
     solutions = []
     #discovered = {}
@@ -165,22 +180,45 @@ def solve_dfs(board, pieces):
 
             if not left:
                 solutions.append(c)
-                print "%s\nstack size: %i solutions found: %i" % (c, len(stack), len(solutions))
+                #print "%s\nstack size: %i solutions found: %i" % (c, len(stack), len(solutions))
                 continue
             stack.append((c, left))
+    print "took %f" %(time.time()-t)
     return solutions
 
 def start(bx, by, pieces):
     board = Board(bx,by)
-    results = solve_dfs(board,get_ordering(pieces, board)) # set( reduce(operator.xor ,(b.rotations() for b in solve(board,pieces))))
+    
+    results = solve_dfs(board, pieces, most_impactful_first)
     print "===== RESULTS =============="
     #for r in results:
     #    print "%s\n\n" % r
     print len(list(results))
 
+    results = solve_dfs(board, pieces, least_first)
+    print "===== RESULTS =============="
+    #for r in results:
+    #    print "%s\n\n" % r
+    print len(list(results))    
+
+    results = solve_dfs(board, pieces, most_impact_per_move)
+    print "===== RESULTS =============="
+    #for r in results:
+    #    print "%s\n\n" % r
+    print len(list(results))
+
+    results = solve_dfs(board, pieces, fixed_order)
+#    print "===== RESULTS =============="
+    #for r in results:
+    #print "%s\n\n" % r
+
+
+    print len(list(results))
+
 if __name__ == "__main__":
     #start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',3)])
-    start(6,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
-    #start(5,5,[('Q',1), ('R', 1), ('N',4)])
-    start(3,3,[('K',1), ('R', 2)])
+    #start(6,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
+    #start(6,6,[('Q',2), ('R', 2), ('N',2)])
+    #start(3,3,[('K',1), ('R', 2)])
+    start(5,5,[("K",1),('Q',1),('B',1),('R',1), ('N',1)])
 
