@@ -3,7 +3,6 @@ import copy
 import operator
 import string
 import datrie
-from guppy import hpy
 
 # R Rook
 # N knight
@@ -95,8 +94,8 @@ def impact(piece, x,y):
 def get_ordering(pieces, board):
     #return sorted(pieces, key=lambda x: impact(x[0], board.bx, board.by))
     return sorted(pieces, key=lambda x: x[1]*100-impact(x[0], board.bx, board.by), reverse=True)
-    #r = list("BNKRQ")
-    #return sorted(pieces, key=lambda x: r.index(x[0]), reverse=True)
+    #return sorted(pieces, key=lambda x: list("BNKRQ").index(x[0]), reverse=True)
+    #return sorted(pieces, key=lambda x: x[1]*impact(x[0], board.bx, board.by)/len(list(combinations, x[1])), reverse=False)
 
 def free_rows_and_columns(data):
     return (sum( 1 for row in data if all(square == '.' for square in row)),
@@ -110,6 +109,7 @@ def filterNode(n,pieces):
     queens_and_rooks = sum(p[1] for p in pieces if p[0] in {'Q','R'})
 
     if queens_and_rooks > min(free_rows_and_columns(n.data)):
+        #print "Filter because queens and rooks"
         return False
 
     return True
@@ -146,23 +146,28 @@ def solve_dfs(board, pieces):
     solutions = []
     #discovered = {}
     discovered = datrie.Trie("%s.\n"%pieces)
+    print "order: %s" % pieces
     while stack:
         b, ps = stack.pop()
         (p, count), left = ps[0], ps[1:]
         moves = ( [(p,) + t for t in c] for c in combinations(b.free, count))
         for move in moves:
             c = b.add_piece(move)
-            if not c or not filterNode(c, left):
-                #print "filtered!"
+            if not c:
                 continue
             cform = unicode(c.get_canonical().__repr__())
-            if cform not in discovered:
-                if not left:
-                    print "%s\nstack size: %i" % (b, len(stack))
-                    solutions.append(b)
-                    continue
-                discovered[cform] = True
-                stack.append((c, left))
+            if cform in discovered:
+                continue
+            discovered[cform] = True
+            if not filterNode(c, left):
+                #print "filtered!"
+                continue
+
+            if not left:
+                solutions.append(c)
+                print "%s\nstack size: %i solutions found: %i" % (c, len(stack), len(solutions))
+                continue
+            stack.append((c, left))
     return solutions
 
 def start(bx, by, pieces):
@@ -174,7 +179,8 @@ def start(bx, by, pieces):
     print len(list(results))
 
 if __name__ == "__main__":
-    #7 8]' '{:K 3, :Q 1, :B 2, :R 2, :N 3}'
-    start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',3)])
-    #start(7,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
+    #start(7,8,[("K",3),('Q',1),('B',2),('R',2), ('N',3)])
+    start(6,6,[("K",2),('Q',1),('B',3),('R',2), ('N',1)])
     #start(5,5,[('Q',1), ('R', 1), ('N',4)])
+    start(3,3,[('K',1), ('R', 2)])
+
